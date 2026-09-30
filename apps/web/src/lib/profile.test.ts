@@ -4,6 +4,7 @@ import {
   saveProfile,
   clearProfile,
   normalizeHandle,
+  parseRouteHandle,
   sanitizeBio,
   bioBytes,
   BIO_MAX_BYTES,
@@ -19,6 +20,24 @@ describe('normalizeHandle', () => {
   });
   it('keeps underscores and digits', () => {
     expect(normalizeHandle('dev_007')).toBe('dev_007');
+  });
+});
+
+describe('parseRouteHandle (#188)', () => {
+  it('lowercases a plain handle and accepts it', () => {
+    expect(parseRouteHandle('Alice')).toEqual({ handle: 'alice', at: false, valid: true });
+    expect(parseRouteHandle('dev_007')).toEqual({ handle: 'dev_007', at: false, valid: true });
+  });
+
+  it('drops one leading @, raw or URL-encoded, and flags it for a redirect', () => {
+    expect(parseRouteHandle('@alice')).toEqual({ handle: 'alice', at: true, valid: true });
+    expect(parseRouteHandle('%40Alice')).toEqual({ handle: 'alice', at: true, valid: true });
+  });
+
+  it('rejects what the app could never create', () => {
+    for (const p of ['a-b', 'ab', 'a b', 'a'.repeat(21), '@@alice', '%E0%A4%A', 'renée']) {
+      expect(parseRouteHandle(p).valid, p).toBe(false);
+    }
   });
 });
 

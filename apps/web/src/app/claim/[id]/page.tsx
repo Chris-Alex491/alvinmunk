@@ -171,15 +171,7 @@ function ClaimInner({ params }: { params: { id: string } }) {
   }
 
   const done = state === 'done';
-  const status = done
-    ? 'CLAIMED'
-    : vouch?.claimed
-      ? 'CLAIMED'
-      : windowOpen
-        ? 'OPEN'
-        : vouch
-          ? 'EXPIRED'
-          : '—';
+  const status = done ? 'CLAIMED' : vouch?.claimed ? 'CLAIMED' : windowOpen ? 'OPEN' : vouch ? 'EXPIRED' : '—';
 
   // Loading — show a skeleton, not a half-rendered "from / —" frame at the most
   // emotionally loaded moment of the funnel.
@@ -255,12 +247,7 @@ function ClaimInner({ params }: { params: { id: string } }) {
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 p-6">
           <div className="flex flex-col items-center gap-2 text-center">
             {vouch ? (
-              <Avatar
-                address={vouch.from}
-                avatar={voucherAvatar}
-                handle={voucherHandle ?? undefined}
-                size={88}
-              />
+              <Avatar address={vouch.from} avatar={voucherAvatar} handle={voucherHandle ?? undefined} size={88} />
             ) : (
               <Crest address={`voucher-${id}`} size={88} points={6} animate />
             )}
@@ -291,9 +278,7 @@ function ClaimInner({ params }: { params: { id: string } }) {
               {done ? (
                 <Crest address={profile?.address ?? `claimer-${id}`} size={80} points={6} animate />
               ) : (
-                <span className="font-mono text-[10px] uppercase text-muted-foreground">
-                  your half
-                </span>
+                <span className="font-mono text-[10px] uppercase text-muted-foreground">your half</span>
               )}
             </div>
             <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -313,17 +298,14 @@ function ClaimInner({ params }: { params: { id: string } }) {
         <div className="grid grid-cols-3 divide-x divide-border/60 border-t border-border/60 font-mono">
           <Field label="STATUS" value={status} />
           <Field label="STAKE" value={vouch ? `${vouch.stake} XP` : '—'} />
-          <Field
-            label="WINDOW"
-            value={vouch ? (windowOpen ? `${daysLeft}d left` : 'closed') : '—'}
-          />
+          <Field label="WINDOW" value={vouch ? (windowOpen ? `${daysLeft}d left` : 'closed') : '—'} />
         </div>
       </Frame>
 
       {!done && vouch && windowOpen && (
         <p className="mt-3 text-xs text-muted-foreground">
-          They staked <strong className="text-foreground">{vouch.stake} reputation</strong> on you —
-          claim within {daysLeft} day{daysLeft === 1 ? '' : 's'} to keep it from being slashed.
+          They staked <strong className="text-foreground">{vouch.stake} reputation</strong> on you — claim within{' '}
+          {daysLeft} day{daysLeft === 1 ? '' : 's'} to keep it from being slashed.
         </p>
       )}
 
@@ -335,9 +317,7 @@ function ClaimInner({ params }: { params: { id: string } }) {
                 {state === 'claiming' ? 'Lighting your star…' : 'Claim your star'}
                 {state !== 'claiming' && <ArrowRight className="size-4" />}
               </Button>
-              {state !== 'claiming' && (
-                <BorderBeam size={56} duration={6} colorTo="hsl(var(--tertiary))" />
-              )}
+              {state !== 'claiming' && <BorderBeam size={56} duration={6} colorTo="hsl(var(--tertiary))" />}
             </span>
             {error && (
               <>
@@ -348,32 +328,20 @@ function ClaimInner({ params }: { params: { id: string } }) {
               </>
             )}
             <p className="max-w-xs text-xs text-muted-foreground text-balance">
-              Nothing to install — we set up your profile, fees sponsored on testnet. No seed
-              phrase.
+              Nothing to install — we set up your profile, fees sponsored on testnet. No seed phrase.
             </p>
           </div>
         ) : (
           <div className="flex flex-col items-start gap-3">
             <div className="relative self-stretch">
-              <StateArt
-                kind="claim-success"
-                size={220}
-                className="mx-auto motion-safe:animate-ignite"
-              />
-              <Sticker
-                name="stamp-verified"
-                size={88}
-                rotate={-8}
-                className="absolute -right-1 top-0 motion-safe:animate-ignite"
-              />
+              <StateArt kind="claim-success" size={220} className="mx-auto motion-safe:animate-ignite" />
+              <Sticker name="stamp-verified" size={88} rotate={-8} className="absolute -right-1 top-0 motion-safe:animate-ignite" />
             </div>
             <Stamp accent="secondary">✦ STAR IGNITED</Stamp>
             {/* The peak emotional moment → the share. People share a nice thing said ABOUT them,
                 not a number. Carry the praise line + link to their public constellation (OG card). */}
             {vouch?.note && (
-              <p className="max-w-xs text-sm italic text-foreground/85">
-                &ldquo;{vouch.note}&rdquo;
-              </p>
+              <p className="max-w-xs text-sm italic text-foreground/85">&ldquo;{vouch.note}&rdquo;</p>
             )}
             <a
               href={`https://twitter.com/intent/tweet?${new URLSearchParams({
@@ -399,10 +367,7 @@ function ClaimInner({ params }: { params: { id: string } }) {
               {profile ? t('claim.openApp') : t('claim.skip')}
             </Link>
             {profile && (
-              <Link
-                href={`/u/${profile.handle}`}
-                className="font-mono text-xs text-muted-foreground underline"
-              >
+              <Link href={`/u/${profile.handle}`} className="font-mono text-xs text-muted-foreground underline">
                 {t('claim.viewProfile')}
               </Link>
             )}
@@ -415,16 +380,8 @@ function ClaimInner({ params }: { params: { id: string } }) {
 
 function ClaimHandlePicker() {
   const t = useTranslations();
-  const {
-    handle,
-    setHandle,
-    avail,
-    retryAvailability,
-    reservedUntil,
-    creating,
-    createProfile,
-    normalizedHandle,
-  } = useCreateProfile({ from: 'claim' });
+  const { handle, setHandle, avail, retryAvailability, reservedUntil, creating, createProfile, normalizedHandle } =
+    useCreateProfile({ from: 'claim' });
 
   return (
     <form
@@ -447,54 +404,22 @@ function ClaimHandlePicker() {
           className="flex-1"
         />
       </div>
-      <p id="claim-handle-status" aria-live="polite" className="min-h-4 text-xs">
-        {avail === 'checking' && (
-          <span className="text-muted-foreground">{t('claim.handle.checking')}</span>
-        )}
+      <p id="claim-handle-status" aria-live="polite" className="h-4 text-xs">
+        {avail === 'checking' && <span className="text-muted-foreground">{t('claim.handle.checking')}</span>}
+        {avail === 'free' && <span className="text-secondary">{t('claim.handle.free', { handle: normalizedHandle })}</span>}
+        {avail === 'taken' && <span className="text-destructive">{t('claim.handle.taken', { handle: normalizedHandle })}</span>}
+        {avail === 'reserved' && reservedUntil && <span className="text-destructive">{t('claim.handle.reserved', { handle: normalizedHandle, date: reservedUntil })}</span>}
         {avail === 'error' && (
           <span className="text-destructive">
-            {t('onboard.checkError')}{' '}
-            <button
-              type="button"
-              className="underline underline-offset-2"
-              onClick={retryAvailability}
-            >
-              {t('onboard.retryCheck')}
+            {t('claim.handle.checkError', { handle: normalizedHandle })}{' '}
+            <button type="button" onClick={retryAvailability} className="underline underline-offset-2">
+              {t('claim.handle.retry')}
             </button>
           </span>
         )}
-        {avail === 'free' && (
-          <span className="text-secondary">
-            {t('claim.handle.free', { handle: normalizedHandle })}
-          </span>
-        )}
-        {avail === 'taken' && (
-          <span className="text-destructive">
-            {t('claim.handle.taken', { handle: normalizedHandle })}
-          </span>
-        )}
-        {avail === 'reserved' && reservedUntil && (
-          <span className="text-destructive">
-            {t('claim.handle.reserved', { handle: normalizedHandle, date: reservedUntil })}
-          </span>
-        )}
       </p>
-      <Button
-        type="submit"
-        variant="flow"
-        size="lg"
-        disabled={
-          creating ||
-          avail === 'checking' ||
-          avail === 'error' ||
-          avail === 'taken' ||
-          avail === 'reserved' ||
-          normalizedHandle.length < 3
-        }
-      >
-        {creating
-          ? t('claim.handle.submitting')
-          : t('claim.handle.submit', { handle: normalizedHandle || 'handle' })}
+      <Button type="submit" variant="flow" size="lg" disabled={creating || avail === 'taken' || avail === 'reserved' || avail === 'error' || normalizedHandle.length < 3}>
+        {creating ? t('claim.handle.submitting') : t('claim.handle.submit', { handle: normalizedHandle || 'handle' })}
       </Button>
     </form>
   );

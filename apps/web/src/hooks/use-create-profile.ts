@@ -14,7 +14,8 @@ import type { Wallet } from '@/lib/wallet';
  *  whether the claim page's own `onboard.claim.*` messages are used (see `messageKey`). */
 export type CreateProfileSource = 'app' | 'landing' | 'claim';
 
-/** `reserved`: freed recently and cooling down for its previous owner (see `reservedUntil`). */
+/** `reserved`: freed recently and cooling down for its previous owner (see `reservedUntil`).
+ *  `error`: the registry couldn't be read, so it is unknown — never shown as free (#188). */
 export type HandleAvailability = 'idle' | 'checking' | 'free' | 'taken' | 'reserved' | 'error';
 
 export interface UseCreateProfileOptions {
@@ -33,6 +34,7 @@ export interface UseCreateProfileResult {
   /** `normalizeHandle(handle)` — exposed so callers don't need to import/re-derive it. */
   normalizedHandle: string;
   avail: HandleAvailability;
+  /** Run the availability check again, after it came back `error`. */
   retryAvailability: () => void;
   /** When a `reserved` handle opens up to everyone, as a localized date; null otherwise. */
   reservedUntil: string | null;
@@ -65,11 +67,7 @@ export interface UseCreateProfileResult {
  * server-rendered marketing page, and a static import here would pull stellar-sdk into
  * that bundle (see the NOTE in `landing-onboard.tsx`).
  */
-export function useCreateProfile({
-  from,
-  face,
-  onCreated,
-}: UseCreateProfileOptions): UseCreateProfileResult {
+export function useCreateProfile({ from, face, onCreated }: UseCreateProfileOptions): UseCreateProfileResult {
   const t = useTranslations();
   const { locale } = useLocale();
   const { wallet, connect, setProfile, restoreProfile } = useWallet();
@@ -115,6 +113,8 @@ export function useCreateProfile({
       clearTimeout(timer);
     };
   }, [normalizedHandle, address, day, checkAttempt]);
+
+  const retryAvailability = useCallback(() => setCheckAttempt((n) => n + 1), []);
 
   /** The address already holds `p`'s handle, now adopted as the local profile. */
   const welcomeBack = useCallback(
@@ -185,20 +185,7 @@ export function useCreateProfile({
     } finally {
       setCreating(false);
     }
-  }, [
-    normalizedHandle,
-    wallet,
-    connect,
-    setProfile,
-    restoreProfile,
-    welcomeBack,
-    face,
-    from,
-    onCreated,
-    t,
-    day,
-    messageKey,
-  ]);
+  }, [normalizedHandle, wallet, connect, setProfile, restoreProfile, welcomeBack, face, from, onCreated, t, day, messageKey]);
 
   const restoreAccount = useCallback(async () => {
     setRestoring(true);
@@ -232,7 +219,7 @@ export function useCreateProfile({
     setHandle,
     normalizedHandle,
     avail,
-    retryAvailability: () => setCheckAttempt((attempt) => attempt + 1),
+    retryAvailability,
     reservedUntil,
     creating,
     createProfile,

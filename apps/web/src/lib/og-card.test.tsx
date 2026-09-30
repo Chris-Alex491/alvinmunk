@@ -16,14 +16,7 @@ vi.mock('./registry', () => ({
 vi.mock('./reputation', () => ({ getScores: async () => ({ social: 40, earned: 7 }) }));
 vi.mock('./constellation', () => ({ getPeopleCounts: async () => ({ vouchedBy: 3, backed: 2 }) }));
 
-import {
-  ogResolve,
-  ogCard,
-  claimCard,
-  claimNameSize,
-  handleFontSize,
-  type OgScores,
-} from './og-card';
+import { ogResolve, ogCard, claimCard, claimNameSize, handleFontSize, type OgScores } from './og-card';
 import { shortAddr } from '@alvinmunk/shared';
 import { loadPng } from './og-assets';
 import { FACE_IDS, defaultAvatarId, faceFile, kitFile, type KitAvatar } from './avatar';
@@ -69,13 +62,7 @@ describe('ogResolve', () => {
     const avatar = { kind: 'face', id: 'face-04' };
     resolveHandleMock.mockResolvedValueOnce(G);
     getMetaMock.mockResolvedValueOnce({ avatar, bio: 'hello' });
-    await expect(ogResolve('alice')).resolves.toEqual({
-      address: G,
-      lookupError: false,
-      scores,
-      avatar,
-      bio: 'hello',
-    });
+    await expect(ogResolve('alice')).resolves.toEqual({ address: G, lookup: 'ok', scores, avatar, bio: 'hello' });
     expect(getMetaMock).toHaveBeenCalledWith(G);
   });
 
@@ -91,23 +78,41 @@ describe('ogResolve', () => {
 
   it('never asks for a profile when the handle is unclaimed', async () => {
     resolveHandleMock.mockResolvedValueOnce(null);
-    await expect(ogResolve('free')).resolves.toMatchObject({ address: null, bio: '' });
+    await expect(ogResolve('free')).resolves.toMatchObject({ address: null, lookup: 'ok', bio: '' });
     expect(getMetaMock).not.toHaveBeenCalled();
   });
 
-  it('marks a failed handle lookup so the card cannot advertise it as available', async () => {
+  it('marks a failed lookup as an error, not as an unclaimed handle (#188)', async () => {
     resolveHandleMock.mockRejectedValueOnce(new Error('rpc down'));
-    const result = await ogResolve('alice');
-    expect(result).toMatchObject({ address: null, lookupError: true });
-    const doc = render(
-      ogCard({ handle: 'alice', address: null, lookupError: result.lookupError, scores }),
-    );
-    expect(doc.body.textContent).toContain('profile lookup unavailable');
-    expect(doc.body.textContent).not.toContain('available — claim it');
+    await expect(ogResolve('alice')).resolves.toMatchObject({ address: null, lookup: 'error' });
+    expect(getMetaMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps a resolved handle when only its profile read fails', async () => {
+    resolveHandleMock.mockResolvedValueOnce(G);
+    getMetaMock.mockRejectedValueOnce(new Error('rpc down'));
+    await expect(ogResolve('alice')).resolves.toMatchObject({ address: G, lookup: 'ok', scores, bio: '' });
+  });
+
+  it('never looks up a handle the app could not create', async () => {
+    for (const h of ['a-b', 'ab', 'a'.repeat(21)]) {
+      await expect(ogResolve(h)).resolves.toMatchObject({ address: null, lookup: 'invalid' });
+    }
+    expect(resolveHandleMock).not.toHaveBeenCalled();
   });
 });
 
 describe('ogCard', () => {
+  it('only calls an unclaimed handle available when the lookup said so', () => {
+    const line = (lookup?: 'ok' | 'error' | 'invalid') =>
+      render(ogCard({ handle: 'alice', address: null, lookup, scores })).body.textContent;
+    expect(line()).toContain('available — claim it');
+    expect(line('error')).toContain('profile lookup unavailable');
+    expect(line('error')).not.toContain('available — claim it');
+    expect(line('invalid')).toContain('not a valid handle');
+    expect(line('invalid')).not.toContain('claim it');
+  });
+
   it('shows the published face sticker', () => {
     const doc = render(
       ogCard({ handle: 'alice', address: G, scores, avatar: { kind: 'face', id: PUBLISHED } }),
@@ -183,13 +188,9 @@ describe('claimCard', () => {
     const kit: KitAvatar = { kind: 'kit', skin: 2, hair: 5, eyes: 3, mouth: 9, acc: null, bg: 4 };
     const doc = render(claimCard({ ...open, avatar: kit }));
     expect(srcs(doc)).toEqual(
-      [
-        kitFile('bg', 4),
-        kitFile('skin', 2),
-        kitFile('hair', 5),
-        kitFile('eyes', 3),
-        kitFile('mouth', 9),
-      ].map((f) => loadPng(f).uri),
+      [kitFile('bg', 4), kitFile('skin', 2), kitFile('hair', 5), kitFile('eyes', 3), kitFile('mouth', 9)].map(
+        (f) => loadPng(f).uri,
+      ),
     );
   });
 

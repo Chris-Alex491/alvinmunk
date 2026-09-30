@@ -41,6 +41,26 @@ export function normalizeHandle(input: string): string {
     .slice(0, 20);
 }
 
+/**
+ * A `/u/<handle>` or `/v/<handle>` route param read as a handle (#188): URL-decoded,
+ * lowercased and without one leading `@`. `at` says the param had that `@`, so the page can
+ * redirect to the canonical path; `valid` says it is a handle the app could create
+ * (`normalizeHandle` leaves it unchanged, 3+ characters), so an invalid one is never
+ * looked up or offered for claiming.
+ */
+export function parseRouteHandle(param: string): { handle: string; at: boolean; valid: boolean } {
+  let raw = param;
+  try {
+    raw = decodeURIComponent(param);
+  } catch {
+    /* a stray `%`: keep the param as it came */
+  }
+  raw = raw.toLowerCase();
+  const at = raw.startsWith('@');
+  const handle = at ? raw.slice(1) : raw;
+  return { handle, at, valid: handle.length >= 3 && normalizeHandle(handle) === handle };
+}
+
 /** The registry's bio cap. It counts UTF-8 BYTES, so `ş` costs 2 and most emoji 4. */
 export const BIO_MAX_BYTES = 80;
 

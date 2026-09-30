@@ -21,6 +21,7 @@ const ogCardMock = vi.fn<(...a: unknown[]) => { type: string; props: object }>((
 vi.mock('@/lib/og-card', () => ({
   ogResolve: (...a: unknown[]) => ogResolveMock(...a),
   ogCard: (...a: unknown[]) => ogCardMock(...a),
+  OG_RETRY_CACHE: 'public, max-age=60, s-maxage=60',
 }));
 
 const loadFontMock = vi.fn((relPath: string) => `font-bytes:${relPath}`);
@@ -32,12 +33,7 @@ describe('/u/[handle]/opengraph-image', () => {
     ogResolveMock.mockReset();
     ogCardMock.mockClear();
     loadFontMock.mockClear();
-    ogResolveMock.mockResolvedValue({
-      address: 'GABC',
-      scores: { social: 1, earned: 2, vouchedBy: 0, backed: 0 },
-      avatar: undefined,
-      bio: '',
-    });
+    ogResolveMock.mockResolvedValue({ address: 'GABC', lookup: 'ok', scores: { social: 1, earned: 2, vouchedBy: 0, backed: 0 }, avatar: undefined, bio: '' });
   });
 
   it('loads both a regular and a bold weight of the same family, not the bold weight alone', async () => {
@@ -47,22 +43,11 @@ describe('/u/[handle]/opengraph-image', () => {
     expect(loadFontMock).toHaveBeenCalledWith('fonts/NotoSans-Regular.ttf');
     expect(loadFontMock).toHaveBeenCalledWith('fonts/NotoSans-Bold.ttf');
 
-    const [, options] = imageResponseMock.mock.calls[0] as [
-      unknown,
-      { fonts: Array<{ name: string; weight: number; data: string }> },
-    ];
+    const [, options] = imageResponseMock.mock.calls[0] as [unknown, { fonts: Array<{ name: string; weight: number; data: string }> }];
     expect(options.fonts).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          name: 'Noto Sans',
-          weight: 400,
-          data: 'font-bytes:fonts/NotoSans-Regular.ttf',
-        }),
-        expect.objectContaining({
-          name: 'Noto Sans',
-          weight: 700,
-          data: 'font-bytes:fonts/NotoSans-Bold.ttf',
-        }),
+        expect.objectContaining({ name: 'Noto Sans', weight: 400, data: 'font-bytes:fonts/NotoSans-Regular.ttf' }),
+        expect.objectContaining({ name: 'Noto Sans', weight: 700, data: 'font-bytes:fonts/NotoSans-Bold.ttf' }),
       ]),
     );
     // Every font shares one family name — ogCard's root only sets `fontFamily: 'Noto Sans'`
@@ -76,19 +61,31 @@ describe('/u/[handle]/opengraph-image', () => {
     expect(ogResolveMock).toHaveBeenCalledWith('alice');
   });
 
-  it('uses a short cache lifetime when handle resolution fails', async () => {
+  it('drops a leading @ before resolving it', async () => {
+    const { default: Image } = await import('./opengraph-image');
+    await Image({ params: { handle: '%40Alice' } });
+    expect(ogResolveMock).toHaveBeenCalledWith('alice');
+  });
+
+  it('keeps next/og default caching for a resolved card', async () => {
+    const { default: Image } = await import('./opengraph-image');
+    await Image({ params: { handle: 'alice' } });
+    const [, options] = imageResponseMock.mock.calls[0] as [unknown, { headers?: Record<string, string> }];
+    expect(options.headers).toBeUndefined();
+  });
+
+  it('caches the neutral card for a minute when the lookup failed (#188)', async () => {
     ogResolveMock.mockResolvedValueOnce({
       address: null,
-      lookupError: true,
+      lookup: 'error',
       scores: { social: 0, earned: 0, vouchedBy: 0, backed: 0 },
       bio: '',
     });
     const { default: Image } = await import('./opengraph-image');
     await Image({ params: { handle: 'alice' } });
-    const [, options] = imageResponseMock.mock.calls[0] as [
-      unknown,
-      { headers: Record<string, string> },
-    ];
-    expect(options.headers['Cache-Control']).toBe('public, max-age=60, s-maxage=60');
+    const [, options] = imageResponseMock.mock.calls[0] as [unknown, { headers: Record<string, string> }];
+    // Lowercase, so it replaces next/og's own `cache-control` instead of joining it.
+    expect(options.headers).toEqual({ 'cache-control': 'public, max-age=60, s-maxage=60' });
+    expect(ogCardMock).toHaveBeenCalledWith(expect.objectContaining({ address: null, lookup: 'error' }));
   });
 });

@@ -15,12 +15,16 @@ import { shareInFlight } from './utils';
 /** The registry to read: `net`'s (the ?network= override) or the deployment's. */
 const registryOf = (net?: ReadNetwork | null) => (net ? net.contracts.registry : registryId());
 
-/** Resolve `@handle` → address (public, wallet-free). null only if unclaimed/unconfigured. */
-export async function resolveHandle(
-  handle: string,
-  net?: ReadNetwork | null,
-): Promise<string | null> {
-  if (!registryOf(net) || !handle) return null;
+/** What a registry handle can be at all: a Soroban `Symbol` (`[A-Za-z0-9_]`, at most 32). */
+const SYMBOL = /^[A-Za-z0-9_]{1,32}$/;
+
+/**
+ * Resolve `@handle` → address (public, wallet-free). null when nobody holds it, when no
+ * registry is configured, or when `handle` can never be one (no read then). A read that
+ * FAILS rejects instead (#188): an RPC outage must never pass for a free handle.
+ */
+export async function resolveHandle(handle: string, net?: ReadNetwork | null): Promise<string | null> {
+  if (!registryOf(net) || !SYMBOL.test(handle)) return null;
   return (net?.client ?? readClient()).resolveHandle(handle);
 }
 
@@ -79,12 +83,7 @@ export async function reverseHandles(
 function reverseChunk(chunk: string[], net?: ReadNetwork | null): Promise<(string | null)[]> {
   return shareInFlight(pendingReverse, `${net?.network ?? ''}|${chunk.join(',')}`, async () => {
     try {
-      const v = await readPublic<unknown>(
-        registryOf(net),
-        'reverse_many',
-        [args.addrs(chunk)],
-        net,
-      );
+      const v = await readPublic<unknown>(registryOf(net), 'reverse_many', [args.addrs(chunk)], net);
       if (!Array.isArray(v) || v.length !== chunk.length) return chunk.map(() => null);
       return v.map((h) => (typeof h === 'string' ? h : null));
     } catch (e) {
@@ -126,7 +125,8 @@ export type HandleAvailability =
 /**
  * Can `address` (anyone, when omitted) claim `handle`? Taken while someone holds it;
  * reserved while it cools down after its holder released it or renamed away, except for
- * that previous holder, who may take it back any time.
+ * that previous holder, who may take it back any time. Rejects when the holder can't be
+ * read, so a caller shows "couldn't check" rather than "free".
  */
 export async function handleAvailability(
   handle: string,
@@ -151,7 +151,12 @@ export async function isHandleAvailable(handle: string, address?: string): Promi
 
 /** Claim `@handle` on-chain (first-come; renames if the wallet already holds one). */
 export async function claimHandle(wallet: Wallet, handle: string): Promise<void> {
-  await invokeAndWait(registryId(), 'claim', [args.addr(wallet.address), args.sym(handle)], wallet);
+  await invokeAndWait(
+    registryId(),
+    'claim',
+    [args.addr(wallet.address), args.sym(handle)],
+    wallet,
+  );
 }
 
 /** Registry error codes `transfer_handle` can revert with (mirrors the contract's Error enum). */

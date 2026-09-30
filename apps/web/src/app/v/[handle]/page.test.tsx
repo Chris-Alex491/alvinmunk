@@ -5,9 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const { resolveHandleMock, router } = vi.hoisted(() => ({
+const { resolveHandleMock, replaceMock } = vi.hoisted(() => ({
   resolveHandleMock: vi.fn(),
-  router: { replace: vi.fn() },
+  replaceMock: vi.fn(),
 }));
 
 vi.mock('@/lib/registry', () => ({
@@ -18,7 +18,7 @@ vi.mock('@/lib/constellation', () => ({
   getPeopleCounts: () => Promise.resolve({ vouchedBy: 0, backed: 0 }),
 }));
 vi.mock('@/components/wallet/wallet-provider', () => ({ useWallet: () => ({ profile: null }) }));
-vi.mock('next/navigation', () => ({ useRouter: () => router }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: replaceMock }) }));
 
 import InvitePage from './page';
 
@@ -31,7 +31,6 @@ describe('/v/[handle] invite ref', () => {
 
   beforeEach(() => {
     sessionStorage.clear();
-    router.replace.mockReset();
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -79,15 +78,33 @@ describe('/v/[handle] invite ref', () => {
     expect(sessionStorage.getItem(KEY)).toBe('carol');
   });
 
-  it('redirects an @-prefixed handle to its canonical invite path', async () => {
-    await visit('@alice');
-    expect(router.replace).toHaveBeenCalledWith('/v/alice');
-    expect(resolveHandleMock).not.toHaveBeenCalled();
+  it('keeps the invite but claims nothing about the inviter when the lookup fails (#188)', async () => {
+    resolveHandleMock.mockRejectedValueOnce(new Error('rpc down')).mockResolvedValueOnce(BOB);
+    await visit('bob');
+    expect(container.textContent).toContain('Couldn’t look this handle up right now.');
+    expect(container.textContent).not.toContain('new to the sky');
+    expect(container.textContent).not.toContain('be their first');
+    expect(container.querySelector('a[href="/app"]')).not.toBeNull(); // the invite still works
+
+    const retry = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Try again')!;
+    await act(async () => retry.click());
+    expect(resolveHandleMock).toHaveBeenCalledTimes(2);
+    expect(sessionStorage.getItem(KEY)).toBe('bob');
+    expect(container.textContent).not.toContain('Couldn’t look this handle up');
   });
 
-  it('renders an invalid-handle state instead of an invite', async () => {
-    await visit('a-b');
-    expect(container.textContent).toContain('profile.invalidHandle');
+  it('redirects /v/@bob to /v/bob without a lookup', async () => {
+    await visit('@Bob');
+    expect(replaceMock).toHaveBeenCalledWith('/v/bob');
     expect(resolveHandleMock).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem(KEY)).toBeNull();
+  });
+
+  it('shows an invalid handle instead of an invite, without a lookup', async () => {
+    await visit('a-b');
+    expect(container.textContent).toContain('Not a valid handle');
+    expect(container.querySelector('a[href="/app"]')).toBeNull();
+    expect(resolveHandleMock).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem(KEY)).toBeNull();
   });
 });

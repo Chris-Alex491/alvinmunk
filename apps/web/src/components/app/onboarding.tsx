@@ -34,11 +34,7 @@ export function Onboarding() {
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 -z-10 opacity-[0.05] [mask-image:radial-gradient(circle_at_top,black,transparent_70%)]"
-        style={{
-          backgroundImage: `url(${asset('backgrounds/app-bg.png')})`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'top',
-        }}
+        style={{ backgroundImage: `url(${asset('backgrounds/app-bg.png')})`, backgroundSize: 'cover', backgroundPosition: 'top' }}
       />
       <div className="text-center">
         <p className="eyebrow mb-3">{t('onboard.eyebrow')}</p>
@@ -72,51 +68,23 @@ export function Onboarding() {
           aria-describedby="handle-status"
         />
         <p id="handle-status" aria-live="polite" className="h-4 text-xs">
-          {avail === 'checking' && (
-            <span className="text-muted-foreground">{t('onboard.checking')}</span>
-          )}
+          {avail === 'checking' && <span className="text-muted-foreground">{t('onboard.checking')}</span>}
+          {avail === 'free' && <span className="text-secondary">{t('onboard.handleFree', { handle: normalizeHandle(handle) })}</span>}
+          {avail === 'taken' && <span className="text-destructive">{t('onboard.handleTaken', { handle: normalizeHandle(handle) })}</span>}
+          {avail === 'reserved' && reservedUntil && <span className="text-destructive">{t('onboard.handleReserved', { handle: normalizeHandle(handle), date: reservedUntil })}</span>}
           {avail === 'error' && (
             <span className="text-destructive">
-              {t('onboard.checkError')}{' '}
-              <button
-                type="button"
-                className="underline underline-offset-2"
-                onClick={retryAvailability}
-              >
+              {t('onboard.checkError', { handle: normalizeHandle(handle) })}{' '}
+              <button type="button" onClick={retryAvailability} className="underline underline-offset-2">
                 {t('onboard.retryCheck')}
               </button>
-            </span>
-          )}
-          {avail === 'free' && (
-            <span className="text-secondary">
-              {t('onboard.handleFree', { handle: normalizeHandle(handle) })}
-            </span>
-          )}
-          {avail === 'taken' && (
-            <span className="text-destructive">
-              {t('onboard.handleTaken', { handle: normalizeHandle(handle) })}
-            </span>
-          )}
-          {avail === 'reserved' && reservedUntil && (
-            <span className="text-destructive">
-              {t('onboard.handleReserved', {
-                handle: normalizeHandle(handle),
-                date: reservedUntil,
-              })}
             </span>
           )}
         </p>
         <Button
           type="submit"
           size="lg"
-          disabled={
-            creating ||
-            restoring ||
-            avail === 'checking' ||
-            avail === 'error' ||
-            avail === 'taken' ||
-            avail === 'reserved'
-          }
+          disabled={creating || restoring || avail === 'taken' || avail === 'reserved' || avail === 'error'}
           className="w-full"
         >
           {creating ? t('onboard.creating') : t('onboard.submit')}

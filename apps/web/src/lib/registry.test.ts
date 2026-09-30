@@ -62,12 +62,7 @@ describe('getMeta', () => {
       avatar: { kind: 'kit', skin: 3, hair: 7, eyes: 5, mouth: 4, acc: 9, bg: 2 },
       bio: 'hi there',
     });
-    expect(readPublicMock).toHaveBeenCalledWith(
-      'CREGISTRY',
-      'get_meta',
-      [{ __addr: G }],
-      undefined,
-    );
+    expect(readPublicMock).toHaveBeenCalledWith('CREGISTRY', 'get_meta', [{ __addr: G }], undefined);
   });
 
   it('is null when the address never published a profile', async () => {
@@ -217,7 +212,7 @@ describe('resolveHandle', () => {
     registry = 'CREGISTRY';
   });
 
-  it("reads the handle's holder, returns null when unclaimed, and propagates read failures", async () => {
+  it("reads the handle's holder, null when unclaimed, and rejects when the read fails (#188)", async () => {
     const down = new Error('fetch failed');
     sdkMock.resolveHandle
       .mockResolvedValueOnce(G)
@@ -225,6 +220,7 @@ describe('resolveHandle', () => {
       .mockRejectedValueOnce(down);
     await expect(resolveHandle('alvin')).resolves.toBe(G);
     await expect(resolveHandle('nobody')).resolves.toBeNull();
+    // An outage is not "unclaimed": callers must be able to tell the two apart.
     await expect(resolveHandle('alvin')).rejects.toBe(down);
     expect(sdkMock.resolveHandle.mock.calls).toEqual([['alvin'], ['nobody'], ['alvin']]);
   });
@@ -235,20 +231,24 @@ describe('resolveHandle', () => {
     await expect(resolveHandle('alvin')).resolves.toBeNull();
     expect(sdkMock.resolveHandle).not.toHaveBeenCalled();
   });
+
+  it('is null, without a read, for a string that can never be a handle', async () => {
+    for (const h of ['a-b', '@alice', 'a b', 'x'.repeat(33)]) {
+      await expect(resolveHandle(h)).resolves.toBeNull();
+    }
+    expect(sdkMock.resolveHandle).not.toHaveBeenCalled();
+  });
 });
 
 describe('reverseHandles', () => {
   // `h:<addr>` for addresses ending in an even digit, none for the rest.
   const handleOf = (a: string) => (Number(a.slice(-1)) % 2 === 0 ? `h:${a}` : null);
-  const addrs = (n: number) =>
-    Array.from({ length: n }, (_, i) => `G${String(i).padStart(3, '0')}`);
+  const addrs = (n: number) => Array.from({ length: n }, (_, i) => `G${String(i).padStart(3, '0')}`);
   const batched = () =>
-    readPublicMock.mockImplementation(
-      async (_id: string, method: string, [arg]: [{ __addrs: string[] }]) => {
-        if (method !== 'reverse_many') throw new Error(`unexpected ${method}`);
-        return arg.__addrs.map(handleOf);
-      },
-    );
+    readPublicMock.mockImplementation(async (_id: string, method: string, [arg]: [{ __addrs: string[] }]) => {
+      if (method !== 'reverse_many') throw new Error(`unexpected ${method}`);
+      return arg.__addrs.map(handleOf);
+    });
   const calls = (method: string) => readPublicMock.mock.calls.filter((c) => c[1] === method);
   const MISSING_REVERSE_MANY = MISSING_FN.replaceAll('get_meta', 'reverse_many');
 
@@ -276,10 +276,7 @@ describe('reverseHandles', () => {
 
   it('shares one read between callers asking for the same rows at once', async () => {
     batched();
-    const [a, b] = await Promise.all([
-      reverseHandles(addrs(3)),
-      reverseHandles(addrs(3).reverse()),
-    ]);
+    const [a, b] = await Promise.all([reverseHandles(addrs(3)), reverseHandles(addrs(3).reverse())]);
     expect(a).toEqual(b);
     expect(readPublicMock).toHaveBeenCalledTimes(1);
   });
@@ -458,6 +455,13 @@ describe('handle cooldown', () => {
     await expect(handleAvailability('alice')).resolves.toEqual({ status: 'free' });
     await expect(isHandleAvailable('alice')).resolves.toBe(true);
   });
+
+  it('rejects instead of answering "free" when the holder cannot be read (#188)', async () => {
+    chain(null, null);
+    sdkMock.resolveHandle.mockRejectedValue(new Error('rpc 503'));
+    await expect(handleAvailability('alice')).rejects.toThrow('rpc 503');
+    await expect(isHandleAvailable('alice')).rejects.toThrow('rpc 503');
+  });
 });
 
 describe('on a ?network= override (#290)', () => {
@@ -485,7 +489,7 @@ describe('on a ?network= override (#290)', () => {
     expect(sdkMock.resolveHandle).not.toHaveBeenCalled();
   });
 
-  it('reads through the override even where the deployment has no registry', async () => {
+  it("reads through the override even where the deployment has no registry", async () => {
     registry = '';
     netClient.resolveHandle.mockResolvedValueOnce(G);
     await expect(resolveHandle('umut', net)).resolves.toBe(G);
@@ -493,9 +497,7 @@ describe('on a ?network= override (#290)', () => {
   });
 
   it("reads the override's get_meta, cached apart from the deployment's profile", async () => {
-    readPublicMock
-      .mockResolvedValueOnce({ bio: 'on mainnet' })
-      .mockResolvedValueOnce({ bio: 'on testnet' });
+    readPublicMock.mockResolvedValueOnce({ bio: 'on mainnet' }).mockResolvedValueOnce({ bio: 'on testnet' });
     await expect(getMeta(G)).resolves.toMatchObject({ bio: 'on mainnet' });
     await expect(getMeta(G, net)).resolves.toMatchObject({ bio: 'on testnet' });
     expect(readPublicMock).toHaveBeenLastCalledWith('CTESTREG', 'get_meta', [{ __addr: G }], net);
@@ -508,11 +510,6 @@ describe('on a ?network= override (#290)', () => {
   it("labels a leaderboard from the override's registry", async () => {
     readPublicMock.mockResolvedValueOnce(['umut']);
     await expect(reverseHandles([G], net)).resolves.toEqual({ [G]: 'umut' });
-    expect(readPublicMock).toHaveBeenCalledWith(
-      'CTESTREG',
-      'reverse_many',
-      [{ __addrs: [G] }],
-      net,
-    );
+    expect(readPublicMock).toHaveBeenCalledWith('CTESTREG', 'reverse_many', [{ __addrs: [G] }], net);
   });
 });
