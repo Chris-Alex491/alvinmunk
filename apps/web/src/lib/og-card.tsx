@@ -51,7 +51,7 @@ const {
 export type OgScores = { social: number; earned: number } & PeopleCounts;
 
 /** How the handle lookup went: `error` = the registry couldn't be read (so the card must not
- *  call the handle available, #188), `invalid` = no handle the app could create. */
+ *  call the handle available, issue 188), `invalid` = no handle the app could create. */
 export type OgLookup = 'ok' | 'error' | 'invalid';
 
 export async function ogResolve(handle: string): Promise<{
