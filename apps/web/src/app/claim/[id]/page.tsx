@@ -10,6 +10,7 @@ import {
   claimVouchSigned,
   getVouch,
   isClaimCode,
+  isVouchCancelled,
   parseClaimCode,
   VOUCH_TTL_SECS,
   type ClaimCode,
@@ -32,7 +33,7 @@ import { HandleHint } from '@/components/handle-hint';
 import { useCreateProfile } from '@/hooks/use-create-profile';
 import { HANDLE_MAX_CHARS } from '@/lib/profile';
 import { useTranslations } from '@/lib/i18n';
-import { cn, humanizeError, withTimeout } from '@/lib/utils';
+import { cn, contractErrorCode, humanizeError, withTimeout } from '@/lib/utils';
 
 /** Read the claim code from the URL: the claim key's seed (#k=…) on current links, the
  *  plain secret (#s=…, or the older ?s= query) on links to cards minted before the key.
@@ -78,6 +79,8 @@ function ClaimInner({ params }: { params: { id: string } }) {
   const [state, setState] = useState<'preview' | 'claiming' | 'done' | 'error'>('preview');
   const [error, setError] = useState<string | null>(null);
   const [vouch, setVouch] = useState<VouchView | null | undefined>(undefined);
+  /** The voucher revoked this card (`cancel_vouch`, #137): it can no longer be claimed. */
+  const [cancelled, setCancelled] = useState(false);
   // Distinguish "couldn't read the chain" (retryable) from "this vouch doesn't exist"
   // so a slow/failing RPC never masquerades as an expired or missing vouch.
   const [loadError, setLoadError] = useState(false);
@@ -96,9 +99,19 @@ function ClaimInner({ params }: { params: { id: string } }) {
     }
     let alive = true;
     setVouch(undefined);
+    setCancelled(false);
     setLoadError(false);
-    withTimeout(getVouch(vid), 15_000, 'vouch')
-      .then((v) => alive && setVouch(v ?? null))
+    Promise.all([
+      withTimeout(getVouch(vid), 15_000, 'vouch'),
+      // Never rejects: an unreadable flag, or a contract without `is_cancelled`, reads as not
+      // cancelled — the claim itself still reverts with #16 on a cancelled card.
+      withTimeout(isVouchCancelled(vid), 15_000, 'vouch').catch(() => null),
+    ])
+      .then(([v, c]) => {
+        if (!alive) return;
+        setVouch(v ?? null);
+        setCancelled(c === true);
+      })
       .catch(() => {
         if (alive) {
           setVouch(null);
@@ -168,6 +181,12 @@ function ClaimInner({ params }: { params: { id: string } }) {
         }).catch(() => {});
       }
     } catch (e) {
+      // Revoked since the page loaded: show the cancelled state rather than an error.
+      if (contractErrorCode(e) === 16) {
+        setCancelled(true);
+        setState('preview');
+        return;
+      }
       setError(claimErrorMessage(e));
       setState('error');
     }
@@ -227,12 +246,32 @@ function ClaimInner({ params }: { params: { id: string } }) {
     );
   }
 
+  // Revoked by the voucher (the link leaked): a final state, not a dead Claim button.
+  if (cancelled && vouch && !vouch.claimed && !done) {
+    return (
+      <div className="container max-w-lg py-16">
+        <p className="eyebrow-mono text-primary/80">
+          {t('claim.cancelled.frame')}
+        </p>
+        <h1 className="mt-4 font-display text-4xl font-semibold tracking-tight">
+          {t('claim.cancelled.title')}
+        </h1>
+        <p className="mt-3 max-w-sm text-muted-foreground text-balance">{t('claim.cancelled.body')}</p>
+        <div className="mt-7 flex flex-col items-start gap-3">
+          <Link href="/app" className="font-mono text-xs text-muted-foreground underline">
+            {t('claim.openApp')}
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container max-w-lg py-16">
       <p className="eyebrow-mono text-primary/80">
         {done ? '// connected' : '// incoming_vouch'}
       </p>
-      <h1 className="mt-4 font-display text-4xl font-semibold tracking-tight">
+      <h1 className="mt-4 font-display text-3xl font-semibold tracking-tight [overflow-wrap:anywhere] sm:text-4xl">
         {done
           ? "You're connected."
           : voucherHandle
@@ -247,14 +286,15 @@ function ClaimInner({ params }: { params: { id: string } }) {
 
       <Frame label={`vouch // #${id}`} index={status} className="mt-7">
         {/* the two halves */}
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 p-6">
+        {/* minmax(0, …): a long @handle truncates instead of widening its half (#477). */}
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 p-6">
           <div className="flex flex-col items-center gap-2 text-center">
             {vouch ? (
               <Avatar address={vouch.from} avatar={voucherAvatar} handle={voucherHandle ?? undefined} size={88} />
             ) : (
               <Crest address={`voucher-${id}`} size={88} points={6} animate />
             )}
-            <span className="font-mono text-2xs uppercase tracking-wider text-muted-foreground">
+            <span className="max-w-full truncate font-mono text-2xs uppercase tracking-wider text-muted-foreground">
               {voucherHandle ? `@${voucherHandle}` : vouch ? shortAddr(vouch.from) : 'from'}
             </span>
             {voucherHandle && vouch && !done && (
@@ -262,7 +302,7 @@ function ClaimInner({ params }: { params: { id: string } }) {
                 href={`/u/${voucherHandle}`}
                 target="_blank"
                 rel="noreferrer"
-                className="font-mono text-2xs uppercase tracking-wider text-primary/70 underline underline-offset-2 hover:text-primary transition-colors"
+                className="max-w-full truncate font-mono text-2xs uppercase tracking-wider text-primary/70 underline underline-offset-2 hover:text-primary transition-colors"
               >
                 {t('claim.voucher.viewProfile', { handle: voucherHandle })}
               </Link>
