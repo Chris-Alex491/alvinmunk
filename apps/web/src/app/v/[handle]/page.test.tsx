@@ -5,7 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const { resolveHandleMock } = vi.hoisted(() => ({ resolveHandleMock: vi.fn() }));
+const { resolveHandleMock, router } = vi.hoisted(() => ({
+  resolveHandleMock: vi.fn(),
+  router: { replace: vi.fn() },
+}));
 
 vi.mock('@/lib/registry', () => ({
   resolveHandle: resolveHandleMock,
@@ -15,6 +18,7 @@ vi.mock('@/lib/constellation', () => ({
   getPeopleCounts: () => Promise.resolve({ vouchedBy: 0, backed: 0 }),
 }));
 vi.mock('@/components/wallet/wallet-provider', () => ({ useWallet: () => ({ profile: null }) }));
+vi.mock('next/navigation', () => ({ useRouter: () => router }));
 
 import InvitePage from './page';
 
@@ -27,6 +31,7 @@ describe('/v/[handle] invite ref', () => {
 
   beforeEach(() => {
     sessionStorage.clear();
+    router.replace.mockReset();
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -72,5 +77,17 @@ describe('/v/[handle] invite ref', () => {
     resolveHandleMock.mockResolvedValue(null);
     await visit('nobody');
     expect(sessionStorage.getItem(KEY)).toBe('carol');
+  });
+
+  it('redirects an @-prefixed handle to its canonical invite path', async () => {
+    await visit('@alice');
+    expect(router.replace).toHaveBeenCalledWith('/v/alice');
+    expect(resolveHandleMock).not.toHaveBeenCalled();
+  });
+
+  it('renders an invalid-handle state instead of an invite', async () => {
+    await visit('a-b');
+    expect(container.textContent).toContain('profile.invalidHandle');
+    expect(resolveHandleMock).not.toHaveBeenCalled();
   });
 });

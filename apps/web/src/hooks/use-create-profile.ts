@@ -15,7 +15,7 @@ import type { Wallet } from '@/lib/wallet';
 export type CreateProfileSource = 'app' | 'landing' | 'claim';
 
 /** `reserved`: freed recently and cooling down for its previous owner (see `reservedUntil`). */
-export type HandleAvailability = 'idle' | 'checking' | 'free' | 'taken' | 'reserved';
+export type HandleAvailability = 'idle' | 'checking' | 'free' | 'taken' | 'reserved' | 'error';
 
 export interface UseCreateProfileOptions {
   from: CreateProfileSource;
@@ -33,6 +33,7 @@ export interface UseCreateProfileResult {
   /** `normalizeHandle(handle)` — exposed so callers don't need to import/re-derive it. */
   normalizedHandle: string;
   avail: HandleAvailability;
+  retryAvailability: () => void;
   /** When a `reserved` handle opens up to everyone, as a localized date; null otherwise. */
   reservedUntil: string | null;
   creating: boolean;
@@ -64,7 +65,11 @@ export interface UseCreateProfileResult {
  * server-rendered marketing page, and a static import here would pull stellar-sdk into
  * that bundle (see the NOTE in `landing-onboard.tsx`).
  */
-export function useCreateProfile({ from, face, onCreated }: UseCreateProfileOptions): UseCreateProfileResult {
+export function useCreateProfile({
+  from,
+  face,
+  onCreated,
+}: UseCreateProfileOptions): UseCreateProfileResult {
   const t = useTranslations();
   const { locale } = useLocale();
   const { wallet, connect, setProfile, restoreProfile } = useWallet();
@@ -72,6 +77,7 @@ export function useCreateProfile({ from, face, onCreated }: UseCreateProfileOpti
   const [creating, setCreating] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [avail, setAvail] = useState<HandleAvailability>('idle');
+  const [checkAttempt, setCheckAttempt] = useState(0);
   const [reservedUntil, setReservedUntil] = useState<string | null>(null);
   const normalizedHandle = normalizeHandle(handle);
   // A handle its holder just released or renamed away from stays reserved for them for a
@@ -102,13 +108,13 @@ export function useCreateProfile({ from, face, onCreated }: UseCreateProfileOpti
           setAvail(a.status);
           setReservedUntil(a.status === 'reserved' ? day(a.until) : null);
         })
-        .catch(() => alive && setAvail('idle'));
+        .catch(() => alive && setAvail('error'));
     }, 400);
     return () => {
       alive = false;
       clearTimeout(timer);
     };
-  }, [normalizedHandle, address, day]);
+  }, [normalizedHandle, address, day, checkAttempt]);
 
   /** The address already holds `p`'s handle, now adopted as the local profile. */
   const welcomeBack = useCallback(
@@ -179,7 +185,20 @@ export function useCreateProfile({ from, face, onCreated }: UseCreateProfileOpti
     } finally {
       setCreating(false);
     }
-  }, [normalizedHandle, wallet, connect, setProfile, restoreProfile, welcomeBack, face, from, onCreated, t, day, messageKey]);
+  }, [
+    normalizedHandle,
+    wallet,
+    connect,
+    setProfile,
+    restoreProfile,
+    welcomeBack,
+    face,
+    from,
+    onCreated,
+    t,
+    day,
+    messageKey,
+  ]);
 
   const restoreAccount = useCallback(async () => {
     setRestoring(true);
@@ -213,6 +232,7 @@ export function useCreateProfile({ from, face, onCreated }: UseCreateProfileOpti
     setHandle,
     normalizedHandle,
     avail,
+    retryAvailability: () => setCheckAttempt((attempt) => attempt + 1),
     reservedUntil,
     creating,
     createProfile,

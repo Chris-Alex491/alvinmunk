@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ArrowRight, QrCode as QrCodeIcon } from 'lucide-react';
 import { resolveHandle, getMeta } from '@/lib/registry';
 import { getPeopleCounts } from '@/lib/constellation';
@@ -19,6 +20,7 @@ import { saveInviteRef } from '@/lib/invite-ref';
 import { shortAddr } from '@alvinmunk/shared';
 import { cn } from '@/lib/utils';
 import type { AvatarConfig } from '@/lib/avatar';
+import { normalizeHandle } from '@/lib/profile';
 
 /**
  * Vouch-invite deep link — `/v/<handle>` is shared by @handle to recruit. The visitor
@@ -28,9 +30,15 @@ import type { AvatarConfig } from '@/lib/avatar';
  */
 export default function InvitePage({ params }: { params: { handle: string } }) {
   const t = useTranslations();
+  const router = useRouter();
   const { profile } = useWallet();
-  const handle = params.handle.toLowerCase();
+  const rawHandle = params.handle.toLowerCase();
+  const handle = rawHandle.startsWith('@') ? rawHandle.slice(1) : rawHandle;
+  const hasLeadingAt = rawHandle.startsWith('@');
+  const invalidHandle = handle.length < 3 || normalizeHandle(handle) !== handle;
   const [address, setAddress] = useState<string | null | undefined>(undefined);
+  const [lookupError, setLookupError] = useState(false);
+  const [retryLookup, setRetryLookup] = useState(0);
   const [vouchedBy, setVouchedBy] = useState<number | null>(null);
   const [avatar, setAvatar] = useState<AvatarConfig | undefined>(undefined);
   const [showInviteQr, setShowInviteQr] = useState(false);
@@ -41,8 +49,15 @@ export default function InvitePage({ params }: { params: { handle: string } }) {
   }, []);
 
   useEffect(() => {
+    if (hasLeadingAt) router.replace(`/v/${handle}`);
+  }, [handle, hasLeadingAt, router]);
+
+  useEffect(() => {
+    if (hasLeadingAt || invalidHandle) return;
     let alive = true;
     setAvatar(undefined);
+    setAddress(undefined);
+    setLookupError(false);
     resolveHandle(handle)
       .then(async (addr) => {
         if (!alive) return;
@@ -57,11 +72,43 @@ export default function InvitePage({ params }: { params: { handle: string } }) {
         setVouchedBy(people.vouchedBy);
         setAvatar(meta?.avatar);
       })
-      .catch(() => alive && setAddress(null));
+      .catch(() => {
+        if (!alive) return;
+        setAddress(null);
+        setLookupError(true);
+      });
     return () => {
       alive = false;
     };
-  }, [handle]);
+  }, [handle, hasLeadingAt, invalidHandle, retryLookup]);
+
+  if (hasLeadingAt) return null;
+  if (invalidHandle) {
+    return (
+      <div className="container max-w-lg py-16">
+        <Frame label="invite // invalid" index="INVALID">
+          <div className="p-7 text-center">
+            <h1 className="font-display text-2xl font-semibold">{t('profile.invalidHandle')}</h1>
+            <p className="mt-2 text-sm text-muted-foreground">{t('profile.invalidHandleDetail')}</p>
+          </div>
+        </Frame>
+      </div>
+    );
+  }
+  if (lookupError) {
+    return (
+      <div className="container max-w-lg py-16">
+        <Frame label={`invite // @${handle}`} index="RETRY">
+          <div className="flex flex-col items-center gap-4 p-7 text-center">
+            <p className="text-sm text-muted-foreground">{t('profile.lookupError')}</p>
+            <Button variant="outline" onClick={() => setRetryLookup((attempt) => attempt + 1)}>
+              {t('profile.retryLookup')}
+            </Button>
+          </div>
+        </Frame>
+      </div>
+    );
+  }
 
   // The owner is the connected wallet whose address this handle resolves to.
   // Only they see the (secret-free) invite QR for their own page.
@@ -69,7 +116,9 @@ export default function InvitePage({ params }: { params: { handle: string } }) {
 
   return (
     <div className="container max-w-lg py-16">
-      <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-primary/80">{'// you_are_invited'}</p>
+      <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-primary/80">
+        {'// you_are_invited'}
+      </p>
       <h1 className="mt-4 font-display text-4xl font-semibold tracking-tight text-balance">
         @{handle} wants you in their <AuroraText>constellation.</AuroraText>
       </h1>

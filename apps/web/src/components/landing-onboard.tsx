@@ -27,11 +27,12 @@ export function LandingOnboard() {
   const { profile } = useWallet();
   const router = useRouter();
   const [face, setFace] = useState<FaceId | undefined>();
-  const { handle, setHandle, avail, reservedUntil, creating, createProfile } = useCreateProfile({
-    from: 'landing',
-    face,
-    onCreated: () => router.push('/app'),
-  });
+  const { handle, setHandle, avail, retryAvailability, reservedUntil, creating, createProfile } =
+    useCreateProfile({
+      from: 'landing',
+      face,
+      onCreated: () => router.push('/app'),
+    });
 
   // Returning user: skip straight to the app.
   if (profile) {
@@ -62,16 +63,54 @@ export function LandingOnboard() {
           aria-describedby="landing-handle-status"
           className="h-11 flex-1 border-0 bg-transparent focus-visible:ring-0"
         />
-        <Button type="submit" variant="flow" size="md" disabled={creating || avail === 'taken' || avail === 'reserved'} className="shrink-0">
+        <Button
+          type="submit"
+          variant="flow"
+          size="md"
+          disabled={
+            creating ||
+            avail === 'checking' ||
+            avail === 'error' ||
+            avail === 'taken' ||
+            avail === 'reserved'
+          }
+          className="shrink-0"
+        >
           {creating ? t('onboard.creating') : t('onboard.startFree')}
           {!creating && <ArrowRight className="size-4" />}
         </Button>
       </div>
       <p id="landing-handle-status" aria-live="polite" className="mt-2 h-4 pl-4 text-xs">
-        {avail === 'checking' && <span className="text-muted-foreground">{t('onboard.checking')}</span>}
-        {avail === 'free' && <span className="text-secondary">{t('onboard.handleFree', { handle: normalizeHandle(handle) })}</span>}
-        {avail === 'taken' && <span className="text-destructive">{t('onboard.handleTaken', { handle: normalizeHandle(handle) })}</span>}
-        {avail === 'reserved' && reservedUntil && <span className="text-destructive">{t('onboard.handleReserved', { handle: normalizeHandle(handle), date: reservedUntil })}</span>}
+        {avail === 'checking' && (
+          <span className="text-muted-foreground">{t('onboard.checking')}</span>
+        )}
+        {avail === 'error' && (
+          <span className="text-destructive">
+            {t('onboard.checkError')}{' '}
+            <button
+              type="button"
+              className="underline underline-offset-2"
+              onClick={retryAvailability}
+            >
+              {t('onboard.retryCheck')}
+            </button>
+          </span>
+        )}
+        {avail === 'free' && (
+          <span className="text-secondary">
+            {t('onboard.handleFree', { handle: normalizeHandle(handle) })}
+          </span>
+        )}
+        {avail === 'taken' && (
+          <span className="text-destructive">
+            {t('onboard.handleTaken', { handle: normalizeHandle(handle) })}
+          </span>
+        )}
+        {avail === 'reserved' && reservedUntil && (
+          <span className="text-destructive">
+            {t('onboard.handleReserved', { handle: normalizeHandle(handle), date: reservedUntil })}
+          </span>
+        )}
         {avail === 'idle' && <span className="text-muted-foreground">{t('onboard.pill')}</span>}
       </p>
       <div className="mt-4 flex flex-col items-center gap-2">

@@ -16,7 +16,14 @@ vi.mock('./registry', () => ({
 vi.mock('./reputation', () => ({ getScores: async () => ({ social: 40, earned: 7 }) }));
 vi.mock('./constellation', () => ({ getPeopleCounts: async () => ({ vouchedBy: 3, backed: 2 }) }));
 
-import { ogResolve, ogCard, claimCard, claimNameSize, handleFontSize, type OgScores } from './og-card';
+import {
+  ogResolve,
+  ogCard,
+  claimCard,
+  claimNameSize,
+  handleFontSize,
+  type OgScores,
+} from './og-card';
 import { shortAddr } from '@alvinmunk/shared';
 import { loadPng } from './og-assets';
 import { FACE_IDS, defaultAvatarId, faceFile, kitFile, type KitAvatar } from './avatar';
@@ -62,7 +69,13 @@ describe('ogResolve', () => {
     const avatar = { kind: 'face', id: 'face-04' };
     resolveHandleMock.mockResolvedValueOnce(G);
     getMetaMock.mockResolvedValueOnce({ avatar, bio: 'hello' });
-    await expect(ogResolve('alice')).resolves.toEqual({ address: G, scores, avatar, bio: 'hello' });
+    await expect(ogResolve('alice')).resolves.toEqual({
+      address: G,
+      lookupError: false,
+      scores,
+      avatar,
+      bio: 'hello',
+    });
     expect(getMetaMock).toHaveBeenCalledWith(G);
   });
 
@@ -80,6 +93,17 @@ describe('ogResolve', () => {
     resolveHandleMock.mockResolvedValueOnce(null);
     await expect(ogResolve('free')).resolves.toMatchObject({ address: null, bio: '' });
     expect(getMetaMock).not.toHaveBeenCalled();
+  });
+
+  it('marks a failed handle lookup so the card cannot advertise it as available', async () => {
+    resolveHandleMock.mockRejectedValueOnce(new Error('rpc down'));
+    const result = await ogResolve('alice');
+    expect(result).toMatchObject({ address: null, lookupError: true });
+    const doc = render(
+      ogCard({ handle: 'alice', address: null, lookupError: result.lookupError, scores }),
+    );
+    expect(doc.body.textContent).toContain('profile lookup unavailable');
+    expect(doc.body.textContent).not.toContain('available — claim it');
   });
 });
 
@@ -159,9 +183,13 @@ describe('claimCard', () => {
     const kit: KitAvatar = { kind: 'kit', skin: 2, hair: 5, eyes: 3, mouth: 9, acc: null, bg: 4 };
     const doc = render(claimCard({ ...open, avatar: kit }));
     expect(srcs(doc)).toEqual(
-      [kitFile('bg', 4), kitFile('skin', 2), kitFile('hair', 5), kitFile('eyes', 3), kitFile('mouth', 9)].map(
-        (f) => loadPng(f).uri,
-      ),
+      [
+        kitFile('bg', 4),
+        kitFile('skin', 2),
+        kitFile('hair', 5),
+        kitFile('eyes', 3),
+        kitFile('mouth', 9),
+      ].map((f) => loadPng(f).uri),
     );
   });
 

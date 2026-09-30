@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useWallet } from '@/components/wallet/wallet-provider';
 import { getScores, type PeopleCounts } from '@/lib/reputation';
 import { getPeopleCounts } from '@/lib/constellation';
@@ -19,6 +20,8 @@ import { shortAddr } from '@alvinmunk/shared';
 import { cn } from '@/lib/utils';
 import { readNetworkFor, withReadNetwork } from '@/lib/read-network';
 import { ReadOnlyBanner } from '@/components/read-only-banner';
+import { normalizeHandle } from '@/lib/profile';
+import { useTranslations } from '@/lib/i18n';
 
 /**
  * Public profile. The handle is resolved ON-CHAIN via the registry, so ANY claimed
@@ -33,7 +36,12 @@ export default function ProfilePage({
   params: { handle: string };
   searchParams?: { network?: string | string[] };
 }) {
-  const handle = params.handle.toLowerCase();
+  const router = useRouter();
+  const t = useTranslations();
+  const rawHandle = params.handle.toLowerCase();
+  const handle = rawHandle.startsWith('@') ? rawHandle.slice(1) : rawHandle;
+  const hasLeadingAt = rawHandle.startsWith('@');
+  const invalidHandle = handle.length < 3 || normalizeHandle(handle) !== handle;
   // A shared singleton (or null), so it is a stable effect dependency.
   const net = readNetworkFor(searchParams?.network);
   const { profile } = useWallet();
@@ -41,10 +49,18 @@ export default function ProfilePage({
   const [scores, setScores] = useState<{ social: number; earned: number } | null>(null);
   const [people, setPeople] = useState<PeopleCounts | null>(null);
   const [meta, setMeta] = useState<OnChainMeta | null>(null);
+  const [lookupError, setLookupError] = useState(false);
+  const [retryLookup, setRetryLookup] = useState(0);
 
   useEffect(() => {
+    if (hasLeadingAt) router.replace(`/u/${handle}`);
+  }, [handle, hasLeadingAt, router]);
+
+  useEffect(() => {
+    if (hasLeadingAt || invalidHandle) return;
     let alive = true;
     setAddress(undefined);
+    setLookupError(false);
     setScores(null);
     setPeople(null);
     setMeta(null);
@@ -63,11 +79,15 @@ export default function ProfilePage({
         setPeople(p);
         setMeta(m);
       })
-      .catch(() => alive && setAddress(null));
+      .catch(() => {
+        if (!alive) return;
+        setAddress(null);
+        setLookupError(true);
+      });
     return () => {
       alive = false;
     };
-  }, [handle, net]);
+  }, [handle, net, hasLeadingAt, invalidHandle, retryLookup]);
 
   // The signed-in profile lives on the deployment's network, never the override's.
   const isMe = !net && !!address && profile?.address === address;
@@ -75,6 +95,42 @@ export default function ProfilePage({
   // moment you pick, before the tx lands) wins.
   const avatar = (isMe ? profile?.avatar : undefined) ?? meta?.avatar;
   const bio = (isMe ? profile?.bio : undefined) ?? meta?.bio;
+
+  if (hasLeadingAt) return null;
+
+  if (invalidHandle) {
+    return (
+      <div className="container max-w-md py-24">
+        <Frame label="profile // invalid" index="INVALID">
+          <div className="flex flex-col items-center gap-4 p-8 text-center">
+            <h1 className="font-display text-2xl font-semibold">{t('profile.invalidHandle')}</h1>
+            <p className="text-sm text-muted-foreground">{t('profile.invalidHandleDetail')}</p>
+          </div>
+        </Frame>
+      </div>
+    );
+  }
+
+  if (lookupError) {
+    return (
+      <div className="container max-w-md py-24">
+        {net && <ReadOnlyBanner network={net.network} />}
+        <Frame label={`profile // @${handle}`} index="RETRY">
+          <div className="flex flex-col items-center gap-4 p-8 text-center">
+            <h1 className="font-display text-2xl font-semibold">@{handle}</h1>
+            <p className="text-sm text-muted-foreground">{t('profile.lookupError')}</p>
+            <button
+              type="button"
+              className={cn(buttonVariants({ variant: 'outline' }), 'glass')}
+              onClick={() => setRetryLookup((attempt) => attempt + 1)}
+            >
+              {t('profile.retryLookup')}
+            </button>
+          </div>
+        </Frame>
+      </div>
+    );
+  }
 
   if (address === undefined) {
     return (
@@ -106,10 +162,12 @@ export default function ProfilePage({
               </p>
             ) : (
               <>
-                <p className="font-mono text-xs uppercase tracking-wider text-secondary">available</p>
+                <p className="font-mono text-xs uppercase tracking-wider text-secondary">
+                  available
+                </p>
                 <p className="text-sm text-muted-foreground text-balance">
-                  This handle isn&apos;t claimed yet. Open the app, pick it, and it stamps to chain as
-                  your profile ID.
+                  This handle isn&apos;t claimed yet. Open the app, pick it, and it stamps to chain
+                  as your profile ID.
                 </p>
                 <Link href="/app" className={cn(buttonVariants({ variant: 'flow' }))}>
                   Claim @{handle}
@@ -199,10 +257,17 @@ function Field({
   value?: number;
   accent: 'primary' | 'secondary' | 'tertiary';
 }) {
-  const c = accent === 'primary' ? 'text-primary' : accent === 'secondary' ? 'text-secondary' : 'text-tertiary';
+  const c =
+    accent === 'primary'
+      ? 'text-primary'
+      : accent === 'secondary'
+        ? 'text-secondary'
+        : 'text-tertiary';
   return (
     <div className="p-5">
-      <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
+      <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+        {label}
+      </p>
       {value === undefined ? (
         <Skeleton className="mt-2 h-8 w-12" />
       ) : (

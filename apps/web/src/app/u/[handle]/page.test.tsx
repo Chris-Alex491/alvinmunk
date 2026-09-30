@@ -14,12 +14,16 @@ const m = vi.hoisted(() => ({
   profile: null as { address: string } | null,
   net: { network: 'testnet' },
   vouchNetwork: vi.fn(),
+  router: { replace: vi.fn() },
 }));
 
 vi.mock('@/lib/registry', () => ({ resolveHandle: m.resolveHandle, getMeta: m.getMeta }));
 vi.mock('@/lib/reputation', () => ({ getScores: m.getScores }));
 vi.mock('@/lib/constellation', () => ({ getPeopleCounts: m.getPeopleCounts }));
-vi.mock('@/components/wallet/wallet-provider', () => ({ useWallet: () => ({ profile: m.profile }) }));
+vi.mock('@/components/wallet/wallet-provider', () => ({
+  useWallet: () => ({ profile: m.profile }),
+}));
+vi.mock('next/navigation', () => ({ useRouter: () => m.router }));
 vi.mock('@/lib/i18n', () => ({ useTranslations: () => (k: string) => k }));
 // lib/read-network decides what an override is (tested there); here `testnet` is one.
 vi.mock('@/lib/read-network', () => ({
@@ -57,6 +61,7 @@ describe('/u/[handle] on a ?network= override (#290)', () => {
     document.body.appendChild(container);
     root = createRoot(container);
     m.profile = null;
+    m.router.replace.mockReset();
     m.vouchNetwork.mockReset();
     m.resolveHandle.mockReset().mockResolvedValue(G);
     m.getScores.mockReset().mockResolvedValue({ social: 9, earned: 4 });
@@ -86,7 +91,13 @@ describe('/u/[handle] on a ?network= override (#290)', () => {
     expect(container.textContent).toContain('4'); // earned XP from the override's read
     // The vouch network reads the same network, with the override's counts.
     expect(m.vouchNetwork).toHaveBeenLastCalledWith(
-      expect.objectContaining({ address: G, handle: 'umut', net: m.net, vouchedByCount: 3, backedCount: 1 }),
+      expect.objectContaining({
+        address: G,
+        handle: 'umut',
+        net: m.net,
+        vouchedByCount: 3,
+        backedCount: 1,
+      }),
     );
   });
 
@@ -107,13 +118,40 @@ describe('/u/[handle] on a ?network= override (#290)', () => {
     expect(container.textContent).toContain('Nobody held this handle on testnet');
   });
 
+  it('redirects an @-prefixed handle to its canonical profile path', async () => {
+    await act(async () => {
+      root.render(<ProfilePage params={{ handle: '@alice' }} />);
+    });
+    expect(m.router.replace).toHaveBeenCalledWith('/u/alice');
+    expect(m.resolveHandle).not.toHaveBeenCalled();
+  });
+
+  it('shows invalid handles without offering a claim link', async () => {
+    await act(async () => {
+      root.render(<ProfilePage params={{ handle: 'a-b' }} />);
+    });
+    expect(container.textContent).toContain('profile.invalidHandle');
+    expect(container.querySelector('a[href="/app"]')).toBeNull();
+    expect(m.resolveHandle).not.toHaveBeenCalled();
+  });
+
+  it('shows a retryable error instead of an available handle when lookup fails', async () => {
+    m.resolveHandle.mockRejectedValue(new Error('rpc down'));
+    await render();
+    expect(container.textContent).toContain('profile.lookupError');
+    expect(container.textContent).not.toContain('available');
+    expect(container.querySelector('a[href="/app"]')).toBeNull();
+  });
+
   it('is the normal profile without the override', async () => {
     await render();
     expect(m.resolveHandle).toHaveBeenCalledWith('umut', null);
     expect(q('[role="status"]')).toBeNull();
     expect(q('a[href="/app"]')?.textContent).toContain('Vouch @umut');
     expect(q('[data-testid="badges"]')).not.toBeNull();
-    expect(m.vouchNetwork).toHaveBeenLastCalledWith(expect.objectContaining({ net: null, isMe: false }));
+    expect(m.vouchNetwork).toHaveBeenLastCalledWith(
+      expect.objectContaining({ net: null, isMe: false }),
+    );
     expect(q('[data-testid="share"]')?.getAttribute('data-path')).toBe('/u/umut');
   });
 });
