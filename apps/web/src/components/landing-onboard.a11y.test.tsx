@@ -78,7 +78,7 @@ describe('LandingOnboard handle field', () => {
     const input = container.querySelector('input')!;
     const wrapper = input.closest('.glass')!;
     expect(wrapper.className).toMatch(/focus-within:ring-2/);
-    expect(wrapper.className).toMatch(/focus-within:ring-ring\/40/);
+    expect(wrapper.className).toMatch(/focus-within:ring-ring(?![/\w-])/);
   });
 
   it('points the input at the status line with a polite live region', async () => {
@@ -161,8 +161,10 @@ describe('LandingOnboard returning-user CTA (#487)', () => {
     expect(container.querySelector('a button')).toBeNull();
     expect(container.querySelectorAll('button')).toHaveLength(0);
     // Same look as the old <Button variant="flow" size="lg">.
-    for (const c of ['flow', 'rounded-full', 'h-12', 'px-7', 'focus-visible:ring-2']) {
+    for (const c of ['flow', 'rounded-full', 'h-12', 'px-7']) {
       expect(links[0].classList).toContain(c);
     }
+    // Its focus ring is the global :focus-visible outline (#502), not a ring class of its own.
+    expect(links[0].className).not.toMatch(/focus-visible:(ring|outline)/);
   });
 });

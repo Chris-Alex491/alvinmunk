@@ -127,6 +127,12 @@
 @layer base {
   * {
     @apply border-border;
+    /* The focus ring's colour and geometry rest on every element; :focus-visible below only
+       switches it on. A `transition-all` control (Button, the app tabs) then fades the ring
+       in, instead of morphing it from the UA default (3px, currentColor, no offset). */
+    outline-color: hsl(var(--ring));
+    outline-width: 2px;
+    outline-offset: 2px;
   }
   /* Selected text: translucent brand violet under the foreground colour, so coloured text
      (mint, cyan, violet) stays readable when selected in either theme (#509). */
@@ -145,6 +151,15 @@
   }
   h1, h2, h3, h4 {
     @apply font-display tracking-tight;
+  }
+
+  /* One focus ring for the whole app. Declared once, here, so navbar links, the theme
+     toggle, footer links, language pills and every input get the same brand ring instead
+     of a browser default that differs per browser. Components must not hand-pick a ring
+     colour — `--ring` is the only focus colour (see docs/product/DESIGN_SYSTEM_TOKENS.md). */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
   }
 }
 

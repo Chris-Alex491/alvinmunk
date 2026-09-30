@@ -86,7 +86,7 @@ export function Dialog({ open, onClose, labelledBy, children, className }: Dialo
         tabIndex={-1}
         data-lenis-prevent
         className={cn(
-          'my-auto max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-2xl border border-border bg-card p-6 shadow-popover outline-none motion-safe:animate-fade-up',
+          'my-auto max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-2xl border border-border bg-card p-6 shadow-popover focus-visible:outline-none motion-safe:animate-fade-up',
           className,
         )}
       >

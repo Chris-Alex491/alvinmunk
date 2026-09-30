@@ -16,6 +16,7 @@ import { Frame } from '@/components/fx/frame';
 import { useWallet } from '@/components/wallet/wallet-provider';
 import { useFormat, useTranslations, type TFn } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
+import { shortAddr } from '@alvinmunk/shared';
 
 type SearchResult = {
   handle: string;
@@ -311,7 +312,7 @@ function SuggestionPanel({ suggestions, loading, t }: SuggestionPanelProps) {
 }
 
 function SuggestionCard({ suggestion: s, t }: { suggestion: Suggestion; t: TFn }) {
-  const label = s.handle ? `@${s.handle}` : `${s.address.slice(0, 6)}…${s.address.slice(-4)}`;
+  const label = s.handle ? `@${s.handle}` : shortAddr(s.address, 6, 4);
   const mutualText = t(`people.suggest.mutual.${s.sharedCount === 1 ? 'one' : 'other'}`, {
     count: String(s.sharedCount),
   });
@@ -330,23 +331,16 @@ function SuggestionCard({ suggestion: s, t }: { suggestion: Suggestion; t: TFn }
         <p className="truncate text-2xs text-muted-foreground">{mutualText}</p>
       </div>
 
-      {/* `/u/[handle]` resolves ON-CHAIN by handle — an address with no claimed handle
-          has no profile route yet, so don't link somewhere that can only ever 404. */}
-      {s.handle ? (
-        <Link
-          href={`/u/${s.handle}`}
-          aria-label={t('people.suggest.viewAria', { label })}
-          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'shrink-0 gap-1 text-xs')}
-        >
-          <UserPlus className="size-3.5" />
-          {t('people.suggest.view')}
-        </Link>
-      ) : (
-        <Button variant="outline" size="sm" className="shrink-0 gap-1 text-xs" disabled>
-          <UserPlus className="size-3.5" />
-          {t('people.suggest.view')}
-        </Button>
-      )}
+      {/* Every card opens the person: their profile once they hold a handle, else their
+          reputation at /score/<address> (the route VouchNetwork's faces fall back to, #486). */}
+      <Link
+        href={s.handle ? `/u/${s.handle}` : `/score/${s.address}`}
+        aria-label={t(s.handle ? 'people.suggest.viewAria' : 'people.suggest.viewReputationAria', { label })}
+        className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'shrink-0 gap-1 text-xs')}
+      >
+        <UserPlus className="size-3.5" />
+        {t(s.handle ? 'people.suggest.view' : 'people.suggest.viewReputation')}
+      </Link>
     </div>
   );
 }
