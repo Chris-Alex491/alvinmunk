@@ -145,6 +145,12 @@ and the decorative tokens are not Tailwind colors; only the `.glass`, `.grid-fai
 energy; gold/`accent` = human warmth (vouch), used sparingly. No raw hex in components —
 every color must trace back to a token in this file.
 
+**Canvas, three.js and OG images can't read CSS variables.** The starfield, the 3D
+constellation scenes and the Satori OG cards take their colours from
+`apps/web/src/lib/brand-palette.ts` instead: these tokens resolved to hex, per theme.
+`brand-palette.test.ts` recomputes every entry from `globals.css` and fails on drift, and fails
+on any hex literal in `components/brand/*` or `lib/og-card.tsx`. "You" is always `accent`.
+
 **`onchain` is one colour:** `--onchain` equals `--primary` in both themes, and everything
 named `onchain` uses it: `Badge variant="onchain"` (`border-onchain/30 bg-onchain/10
 text-onchain`), `Button variant="onchain"` (`bg-onchain text-primary-foreground
@@ -186,9 +192,17 @@ own tint. No raw Tailwind palette colours (`amber-400`, `emerald-500`, …): use
 | `body` | 1rem / 1.6, sans | default |
 | `small` | 0.875rem / 1.5 | secondary |
 | `caption` | 0.75rem / 1.4, muted | meta, timestamps |
+| `2xs` | 0.6875rem / 1rem | micro labels, chips, hints — the floor: no text below 11px |
 | `mono` | 0.875rem / 1.5, mono | addresses, hashes |
+| `eyebrow` / `eyebrow-mono` | 0.6875rem / 1, 0.22em, uppercase, muted | uppercase kickers (sans / mono) |
 
-Load with `next/font` (variable, `display: "swap"`, subset latin). Headings get
+`2xs` is the Tailwind `text-2xs`; there are no arbitrary `text-[Npx]` sizes outside the OG
+image renderer (`og-card`). Uppercase kickers use the `eyebrow` / `eyebrow-mono` classes
+(`globals.css`, components layer, so a colour utility such as `text-primary/80` overrides the
+muted default) — never a hand-rolled `tracking-[…em]`.
+
+Load with `next/font` (variable, `display: "swap"`, subsets `latin` + `latin-ext`, so
+Turkish ğ, ş and İ are preloaded and render in the brand fonts on first paint). Headings get
 `font-feature-settings` defaults; mono for any `G…`/hash with middle-truncation.
 
 ## 3. Spacing, radius, layout
@@ -257,6 +271,12 @@ modal-overlay 70 · modal 80`.
 - Two blocks in `globals.css`: `:root` (dark, the default) and `:root.light`. The theme is
   a `dark` / `light` class on `<html>`: the server renders `dark`, and an inline script in
   the root layout swaps it before first paint to the choice saved by `ThemeToggle`
-  (`localStorage` key `alvinmunk.theme`), else the OS `prefers-color-scheme`.
+  (`localStorage` key `alvinmunk.theme`), else the OS `prefers-color-scheme`. The toggle
+  cycles Light → Dark → System; System clears the key, so OS changes are followed again.
+- The browser chrome follows the same theme: `viewport.themeColor` has one colour per
+  `prefers-color-scheme`, and applying a theme pins every `theme-color` meta to it. These
+  colours, and the manifest's `background_color` / `theme_color` (dark), are the
+  `--background` tokens as hex (`THEME_COLOR` in `lib/theme.ts`, the one place hex is allowed,
+  since metas and the manifest take no CSS variables). Toasts get the `<html>` class, not the OS.
 - Tokens are the **only** color source — no raw hex in components. A color not in this
   file does not exist in the product.
