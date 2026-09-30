@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, QrCode as QrCodeIcon } from 'lucide-react';
@@ -14,6 +14,7 @@ import { BorderBeam } from '@/components/fx/border-beam';
 import { AuroraText } from '@/components/fx/shiny-text';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { QrCode } from '@/components/fx/qr-code';
+import { ShareRow } from '@/components/fx/share-row';
 import { useWallet } from '@/components/wallet/wallet-provider';
 import { useTranslations } from '@/lib/i18n';
 import { saveInviteRef } from '@/lib/invite-ref';
@@ -43,9 +44,11 @@ export default function InvitePage({ params }: { params: { handle: string } }) {
   const [avatar, setAvatar] = useState<AvatarConfig | undefined>(undefined);
   const [showInviteQr, setShowInviteQr] = useState(false);
   const [origin, setOrigin] = useState('');
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setOrigin(window.location.origin);
+    setMounted(true);
   }, []);
 
   useEffect(() => {
@@ -101,6 +104,48 @@ export default function InvitePage({ params }: { params: { handle: string } }) {
     );
   }
 
+  // The call to action fits who is looking. The stored profile only loads after mount, so
+  // nothing renders before then (the server can't tell the owner from a stranger); a
+  // signed-in visitor also waits for the handle to resolve, since that decides owner or not.
+  let cta: ReactNode = null;
+  if (!profile) {
+    if (mounted) {
+      cta = (
+        <span className="relative inline-flex overflow-hidden rounded-full">
+          <Link href="/app" className={cn(buttonVariants({ variant: 'flow', size: 'lg' }))}>
+            Create your profile <ArrowRight className="size-4" />
+          </Link>
+          <BorderBeam size={60} duration={6} colorTo="hsl(var(--tertiary))" />
+        </span>
+      );
+    }
+  } else if (isOwner) {
+    cta = (
+      <div>
+        <p className="mb-3 font-mono text-xs uppercase tracking-wider text-muted-foreground">
+          {t('invite.cta.share')}
+        </p>
+        <ShareRow path={`/v/${handle}`} text={t('invite.cta.shareText')} />
+      </div>
+    );
+  } else if (address) {
+    cta = (
+      <span className="relative inline-flex overflow-hidden rounded-full">
+        <Link href="/app/vouch" className={cn(buttonVariants({ variant: 'flow', size: 'lg' }))}>
+          {t('invite.cta.vouchBack', { handle })} <ArrowRight className="size-4" />
+        </Link>
+        <BorderBeam size={60} duration={6} colorTo="hsl(var(--tertiary))" />
+      </span>
+    );
+  } else if (address === null) {
+    // Unclaimed (or unreachable): nobody to vouch back, and this visitor has a profile.
+    cta = (
+      <Link href="/app" className={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'glass')}>
+        {t('invite.cta.openApp')} <ArrowRight className="size-4" />
+      </Link>
+    );
+  }
+
   return (
     <div className="container max-w-lg py-16">
       <p className="eyebrow-mono text-primary/80">{'// you_are_invited'}</p>
@@ -149,14 +194,7 @@ export default function InvitePage({ params }: { params: { handle: string } }) {
         </div>
       </Frame>
 
-      <div className="mt-6">
-        <span className="relative inline-flex overflow-hidden rounded-full">
-          <Link href="/app" className={cn(buttonVariants({ variant: 'flow', size: 'lg' }))}>
-            Create your profile <ArrowRight className="size-4" />
-          </Link>
-          <BorderBeam size={60} duration={6} colorTo="hsl(var(--tertiary))" />
-        </span>
-      </div>
+      <div className="mt-6">{cta}</div>
 
       {isOwner && (
         <div className="mt-6">

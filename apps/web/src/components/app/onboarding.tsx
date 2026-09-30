@@ -12,7 +12,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { HandleHint } from '@/components/handle-hint';
 
-export function Onboarding() {
+/** `initialHandle`: prefilled from `/app?handle=<x>` (the "Claim @x" link on `/u/<x>`). */
+export function Onboarding({ initialHandle }: { initialHandle?: string }) {
   const t = useTranslations();
   const [face, setFace] = useState<FaceId | undefined>();
   const {
@@ -28,6 +29,7 @@ export function Onboarding() {
   } = useCreateProfile({
     from: 'app',
     face,
+    initialHandle,
   });
 
   return (
