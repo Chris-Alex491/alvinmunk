@@ -247,7 +247,7 @@ describe('/u/[handle] on a ?network= override (#290)', () => {
   });
 
   it('shows an invalid handle without looking it up or offering to claim it', async () => {
-    for (const handle of ['a-b', 'ab', 'a'.repeat(21)]) {
+    for (const handle of ['a-b', 'ab', 'a'.repeat(33)]) {
       await render(undefined, handle);
       expect(container.textContent).toContain('profile.invalidHandle');
       expect(container.textContent).not.toContain('Claim @');

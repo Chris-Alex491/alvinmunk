@@ -54,8 +54,12 @@ describe('parseRouteHandle (#188)', () => {
     expect(parseRouteHandle('%40Alice')).toEqual({ handle: 'alice', at: true, valid: true });
   });
 
-  it('rejects what the app could never create', () => {
-    for (const p of ['a-b', 'ab', 'a b', 'a'.repeat(21), '@@alice', '%E0%A4%A', 'renée']) {
+  it('accepts a registry handle longer than the app creates, up to 32 characters', () => {
+    expect(parseRouteHandle('a'.repeat(32)).valid).toBe(true);
+  });
+
+  it('rejects what can never be a handle', () => {
+    for (const p of ['a-b', 'ab', 'a b', 'a'.repeat(33), '@@alice', '%E0%A4%A', 'renée']) {
       expect(parseRouteHandle(p).valid, p).toBe(false);
     }
   });

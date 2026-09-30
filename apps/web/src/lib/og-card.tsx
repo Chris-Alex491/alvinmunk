@@ -5,7 +5,7 @@ import { resolveHandle, getMeta } from './registry';
 import { getScores, type PeopleCounts } from './reputation';
 import { getPeopleCounts } from './constellation';
 import { loadPng } from './og-assets';
-import { normalizeHandle } from './profile';
+import { isRouteHandle } from './profile';
 import { BRAND_DARK } from './brand-palette';
 import {
   faceFile,
@@ -68,7 +68,7 @@ export async function ogResolve(handle: string): Promise<{
   let scores: OgScores = { social: 0, earned: 0, vouchedBy: 0, backed: 0 };
   let avatar: AvatarConfig | undefined;
   let bio = '';
-  if (handle.length < 3 || normalizeHandle(handle) !== handle) {
+  if (!isRouteHandle(handle)) {
     return { address, lookup: 'invalid', scores, bio };
   }
   try {

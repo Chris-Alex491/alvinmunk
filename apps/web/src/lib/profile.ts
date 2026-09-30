@@ -58,9 +58,8 @@ export function removedHandleChars(input: string): string[] {
 /**
  * A `/u/<handle>` or `/v/<handle>` route param read as a handle (#188): URL-decoded,
  * lowercased and without one leading `@`. `at` says the param had that `@`, so the page can
- * redirect to the canonical path; `valid` says it is a handle the app could create
- * (`normalizeHandle` leaves it unchanged, 3+ characters), so an invalid one is never
- * looked up or offered for claiming.
+ * redirect to the canonical path; `valid` says it can be a handle at all (`isRouteHandle`),
+ * so an invalid one is never looked up or offered for claiming.
  */
 export function parseRouteHandle(param: string): { handle: string; at: boolean; valid: boolean } {
   let raw = param;
@@ -72,7 +71,16 @@ export function parseRouteHandle(param: string): { handle: string; at: boolean; 
   raw = raw.toLowerCase();
   const at = raw.startsWith('@');
   const handle = at ? raw.slice(1) : raw;
-  return { handle, at, valid: handle.length >= 3 && normalizeHandle(handle) === handle };
+  return { handle, at, valid: isRouteHandle(handle) };
+}
+
+/**
+ * Whether a lowercased route handle can name a profile: `[a-z0-9_]`, 3 to 32 characters.
+ * The app creates at most `HANDLE_MAX_CHARS`, but the registry holds any Symbol up to 32,
+ * and a longer on-chain handle must still render (the /u and /v pages size for 32).
+ */
+export function isRouteHandle(handle: string): boolean {
+  return /^[a-z0-9_]{3,32}$/.test(handle);
 }
 
 /** The registry's bio cap. It counts UTF-8 BYTES, so `ş` costs 2 and most emoji 4. */

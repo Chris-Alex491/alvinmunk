@@ -95,7 +95,7 @@ describe('ogResolve', () => {
   });
 
   it('never looks up a handle the app could not create', async () => {
-    for (const h of ['a-b', 'ab', 'a'.repeat(21)]) {
+    for (const h of ['a-b', 'ab', 'a'.repeat(33)]) {
       await expect(ogResolve(h)).resolves.toMatchObject({ address: null, lookup: 'invalid' });
     }
     expect(resolveHandleMock).not.toHaveBeenCalled();

@@ -164,7 +164,7 @@
   "invite.qr.hide": "Hide invite QR",
   "invite.qr.alt": "QR code for this invite link",
   "profile.invalidHandle": "Not a valid handle",
-  "profile.invalidHandleDetail": "Handles are 3–20 characters: lowercase letters, numbers and underscores.",
+  "profile.invalidHandleDetail": "Handles are at least 3 characters: lowercase letters, numbers and underscores.",
   "profile.lookupError": "Couldn’t look this handle up right now.",
   "profile.retryLookup": "Try again",
   "invite.cta.share": "Share your invite",
