@@ -133,7 +133,8 @@ describe('/u/[handle] on a ?network= override (#290)', () => {
     await render();
     expect(container.textContent).toContain('profile.lookupError');
     expect(container.textContent).not.toContain('available');
-    expect(q('a[href="/app"]')).toBeNull();
+    expect(container.textContent).not.toContain('Claim @');
+    expect(q('a[href^="/app"]')).toBeNull();
 
     const retry = [...container.querySelectorAll('button')].find((b) => b.textContent === 'profile.retryLookup')!;
     await act(async () => retry.click());
@@ -161,7 +162,7 @@ describe('/u/[handle] on a ?network= override (#290)', () => {
       await render(undefined, handle);
       expect(container.textContent).toContain('profile.invalidHandle');
       expect(container.textContent).not.toContain('Claim @');
-      expect(q('a[href="/app"]')).toBeNull();
+      expect(q('a[href^="/app"]')).toBeNull();
     }
     expect(m.resolveHandle).not.toHaveBeenCalled();
   });
